@@ -53,7 +53,7 @@
       </root>
     </mxGraphModel>
   </diagram>
-  <diagram id="arch-google-oauth" name="Architecture — Google OAuth">
+  <diagram id="arch-google-oauth" name="Architecture — Okta OIDC">
     <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1169" pageHeight="827" background="none" math="0" shadow="0">
       <root>
         <mxCell id="0" />
@@ -67,10 +67,10 @@
         <mxCell id="g-claude" parent="1" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=15;image=img/lib/azure2/general/Browser.svg;labelBackgroundColor=none;labelPosition=center;verticalLabelPosition=top;verticalAlign=bottom;" value="claude.ai&lt;div&gt;(remote MCP client)&lt;/div&gt;" vertex="1">
           <mxGeometry height="65.79" width="75" x="80" y="334" as="geometry" />
         </mxCell>
-        <mxCell id="g-google-signin" parent="1" style="sketch=0;html=1;shape=image;verticalLabelPosition=middle;labelBackgroundColor=none;verticalAlign=middle;aspect=fixed;imageAspect=0;image=data:image/svg+xml,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNHB4IiBoZWlnaHQ9IjI0cHgiIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PHN0eWxlPi5jbHMtMXtmaWxsOiM2NjlkZjY7fS5jbHMtMSwuY2xzLTJ7ZmlsbC1ydWxlOmV2ZW5vZGQ7fS5jbHMtMntmaWxsOiM0Mjg1ZjQ7fTwvc3R5bGU+PC9kZWZzPjx0aXRsZT5JY29uXzI0cHhfQ0lDUF9Db2xvcjwvdGl0bGU+PGcgZGF0YS1uYW1lPSJQcm9kdWN0IEljb25zIj48ZyA+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMy4zMyw3LDEyLDJsOC42Niw1djkuNzJMMTcuMzMsMTRINi42N0wzLjMzLDE2LjY3Wk0xNiw4LjY3YTQsNCwwLDEsMC00LDRBNCw0LDAsMCwwLDE2LDguNjdabS0xLjMzLDBBMi42NywyLjY3LDAsMSwxLDEyLDZBMi42NywyLjY3LDAsMCwxLDE0LjY3LDguNjdaIi8+PHBhdGggY2xhc3M9ImNscy0yIiBkPSJNMTIsMTIuNjdhNCw0LDAsMCwwLDAtOFYybDguNjYsNXY5LjcyTDE3LjMzLDE0SDEyWm0yLjY3LTRBMi42NywyLjY3LDAsMCwxLDEyLDExLjMxVjZBMi42NywyLjY3LDAsMCwxLDE0LjY3LDguNjZaIi8+PHBvbHlnb24gY2xhc3M9ImNscy0xIiBwb2ludHM9IjQgMTggMTIgMjIgMjAgMTggMTYuNjcgMTUuMzMgNy4zMyAxNS4zMyA0IDE4Ii8+PHBvbHlnb24gY2xhc3M9ImNscy0yIiBwb2ludHM9IjEyIDIyIDIwIDE4IDE2LjY3IDE1LjMzIDEyIDE1LjMzIDEyIDIyIi8+PC9nPjwvZz48L3N2Zz4=;fontStyle=0;fontColor=light-dark(#000000,#bdc7d4);fontSize=15;align=left;textShadow=0;labelPosition=right;spacingLeft=7;" value="accounts.google.com&lt;div&gt;Google login + consent&lt;/div&gt;" vertex="1">
+        <mxCell id="g-google-signin" parent="1" style="sketch=0;html=1;shape=image;verticalLabelPosition=middle;labelBackgroundColor=none;verticalAlign=middle;aspect=fixed;imageAspect=0;image=data:image/svg+xml,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSI+PHBhdGggZmlsbD0iIzAwN0RDMSIgZD0iTTggMUM0LjE0MyAxIDEgNC4xMiAxIDhzMy4xMjEgNyA3IDcgNy0zLjEyMSA3LTctMy4xNDMtNy03LTd6bTAgMTAuNWMtMS45NCAwLTMuNS0xLjU2LTMuNS0zLjVTNi4wNiA0LjUgOCA0LjVzMy41IDEuNTYgMy41IDMuNS0xLjU2IDMuNS0zLjUgMy41eiIvPjwvc3ZnPg==;fontStyle=0;fontColor=light-dark(#000000,#bdc7d4);fontSize=15;align=left;textShadow=0;labelPosition=right;spacingLeft=7;" value="Okta&lt;div&gt;OIDC login + consent&lt;/div&gt;" vertex="1">
           <mxGeometry height="75" width="75" x="560" y="106" as="geometry" />
         </mxCell>
-        <mxCell id="g-func" parent="1" style="sketch=0;html=1;shape=image;verticalLabelPosition=bottom;labelBackgroundColor=none;verticalAlign=top;aspect=fixed;imageAspect=0;image=data:image/svg+xml,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjIwIiBoZWlnaHQ9IjE5Ljk4OTk5OTc3MTExODE2NCIgdmlld0JveD0iMCAwIDIwIDE5Ljk4OTk5OTc3MTExODE2NCI+JiN4YTsJPHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzQyODVmNDt9JiN4YTsJLnN0MXtmaWxsOiM2NjlkZjY7fSYjeGE7CS5zdDJ7ZmlsbDojYWVjYmZhO30mI3hhOwk8L3N0eWxlPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0zIDMuOTlMMCA2LjQydjcuMTNsMyAyLjQ0eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zIDMuOTlsLTMgNCAzLTJ6bS0zIDhsMyA0di0yeiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0wIDE1Ljk5bDQgNCAyLTItNi02em0uMDEtOEw1Ljk5IDJsLTItMkwwIDMuOTl6Ii8+JiN4YTsJPHBhdGggY2xhc3M9InN0MSIgZD0iTTE3IDE2bDMtMi40MlY2LjQ0TDE3IDR6Ii8+JiN4YTsJPHBhdGggY2xhc3M9InN0MCIgZD0iTTE3IDE2bDMtNC0zIDJ6bTMtOGwtMy00djJ6Ii8+JiN4YTsJPGcgY2xhc3M9InN0MiI+JiN4YTsJCTxwYXRoIGQ9Ik0yMCA0bC00LTQtMiAyIDYgNnptLS4wMSA4bC01Ljk4IDUuOTkgMiAyTDIwIDE2eiIvPiYjeGE7CQk8Y2lyY2xlIGN4PSI2IiBjeT0iOS45OSIgcj0iMSIvPiYjeGE7CQk8Y2lyY2xlIGN4PSIxMCIgY3k9IjkuOTkiIHI9IjEiLz4mI3hhOwkJPGNpcmNsZSBjeD0iMTMuOTkiIGN5PSI5Ljk5IiByPSIxIi8+JiN4YTsJPC9nPiYjeGE7PC9zdmc+;fontStyle=0;fontColor=light-dark(#000000,#bdc7d4);fontSize=15;align=center;textShadow=0;" value="gcp-oauth-mcp-func&lt;div&gt;Cloud Functions (2nd Gen)&lt;/div&gt;&lt;div&gt;&lt;b&gt;public&lt;/b&gt; · auth enforced in code&lt;/div&gt;" vertex="1">
+        <mxCell id="g-func" parent="1" style="sketch=0;html=1;shape=image;verticalLabelPosition=bottom;labelBackgroundColor=none;verticalAlign=top;aspect=fixed;imageAspect=0;image=data:image/svg+xml,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnY9Imh0dHBzOi8vdmVjdGEuaW8vbmFubyIgd2lkdGg9IjIwIiBoZWlnaHQ9IjE5Ljk4OTk5OTc3MTExODE2NCIgdmlld0JveD0iMCAwIDIwIDE5Ljk4OTk5OTc3MTExODE2NCI+JiN4YTsJPHN0eWxlIHR5cGU9InRleHQvY3NzIj4mI3hhOwkuc3Qwe2ZpbGw6IzQyODVmNDt9JiN4YTsJLnN0MXtmaWxsOiM2NjlkZjY7fSYjeGE7CS5zdDJ7ZmlsbDojYWVjYmZhO30mI3hhOwk8L3N0eWxlPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0zIDMuOTlMMCA2LjQydjcuMTNsMyAyLjQ0eiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zIDMuOTlsLTMgNCAzLTJ6bS0zIDhsMyA0di0yeiIvPiYjeGE7CTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0wIDE1Ljk5bDQgNCAyLTItNi02em0uMDEtOEw1Ljk5IDJsLTItMkwwIDMuOTl6Ii8+JiN4YTsJPHBhdGggY2xhc3M9InN0MSIgZD0iTTE3IDE2bDMtMi40MlY2LjQ0TDE3IDR6Ii8+JiN4YTsJPHBhdGggY2xhc3M9InN0MCIgZD0iTTE3IDE2bDMtNC0zIDJ6bTMtOGwtMy00djJ6Ii8+JiN4YTsJPGcgY2xhc3M9InN0MiI+JiN4YTsJCTxwYXRoIGQ9Ik0yMCA0bC00LTQtMiAyIDYgNnptLS4wMSA4bC01Ljk4IDUuOTkgMiAyTDIwIDE2eiIvPiYjeGE7CQk8Y2lyY2xlIGN4PSI2IiBjeT0iOS45OSIgcj0iMSIvPiYjeGE7CQk8Y2lyY2xlIGN4PSIxMCIgY3k9IjkuOTkiIHI9IjEiLz4mI3hhOwkJPGNpcmNsZSBjeD0iMTMuOTkiIGN5PSI5Ljk5IiByPSIxIi8+JiN4YTsJPC9nPiYjeGE7PC9zdmc+;fontStyle=0;fontColor=light-dark(#000000,#bdc7d4);fontSize=15;align=center;textShadow=0;" value="gcp-okta-mcp-func&lt;div&gt;Cloud Functions (2nd Gen)&lt;/div&gt;&lt;div&gt;&lt;b&gt;public&lt;/b&gt; · auth enforced in code&lt;/div&gt;" vertex="1">
           <mxGeometry height="75" width="75" x="560" y="330" as="geometry" />
         </mxCell>
         <mxCell id="g-modules" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F0FE;strokeColor=#4285f4;fontColor=#174EA6;fontSize=13;align=left;spacingLeft=10;verticalAlign=middle;" value="&lt;b&gt;oauth.py&lt;/b&gt;&amp;nbsp; broker&lt;div&gt;&lt;b&gt;mcp.py&lt;/b&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp; JSON-RPC + token check&lt;/div&gt;&lt;div&gt;&lt;b&gt;tools.py&lt;/b&gt;&amp;nbsp; 10 inventory tools&lt;/div&gt;" vertex="1">
@@ -181,7 +181,7 @@
         <mxCell id="p3-a" parent="1" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#EDEFF2;strokeColor=#D2D7DE;fontColor=#5A6472;fontSize=12;" value="public" vertex="1">
           <mxGeometry height="26" width="100" x="682" y="271" as="geometry" />
         </mxCell>
-        <mxCell id="p3-p" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=light-dark(#5A6472,#aab3c0);" value="RFC 7591 — Google has no DCR; we do" vertex="1">
+        <mxCell id="p3-p" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=light-dark(#5A6472,#aab3c0);" value="RFC 7591 — Okta has DCR; we shim it" vertex="1">
           <mxGeometry height="44" width="290" x="840" y="262" as="geometry" />
         </mxCell>
         <mxCell id="hd3" edge="1" parent="1" style="endArrow=none;html=1;strokeColor=#E2E9F3;">
@@ -199,7 +199,7 @@
         <mxCell id="p4-a" parent="1" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#EDEFF2;strokeColor=#D2D7DE;fontColor=#5A6472;fontSize=12;" value="public" vertex="1">
           <mxGeometry height="26" width="100" x="682" y="319" as="geometry" />
         </mxCell>
-        <mxCell id="p4-p" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=light-dark(#5A6472,#aab3c0);" value="Start the Google login" vertex="1">
+        <mxCell id="p4-p" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=light-dark(#5A6472,#aab3c0);" value="Start the Okta login" vertex="1">
           <mxGeometry height="44" width="280" x="840" y="310" as="geometry" />
         </mxCell>
         <mxCell id="hd4" edge="1" parent="1" style="endArrow=none;html=1;strokeColor=#E2E9F3;">
@@ -217,7 +217,7 @@
         <mxCell id="p5-a" parent="1" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#EDEFF2;strokeColor=#D2D7DE;fontColor=#5A6472;fontSize=12;" value="public" vertex="1">
           <mxGeometry height="26" width="100" x="682" y="367" as="geometry" />
         </mxCell>
-        <mxCell id="p5-p" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=light-dark(#5A6472,#aab3c0);" value="The one fixed redirect URI Google sees" vertex="1">
+        <mxCell id="p5-p" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=light-dark(#5A6472,#aab3c0);" value="The one fixed redirect URI Okta sees" vertex="1">
           <mxGeometry height="44" width="290" x="840" y="358" as="geometry" />
         </mxCell>
         <mxCell id="hd5" edge="1" parent="1" style="endArrow=none;html=1;strokeColor=#E2E9F3;">
@@ -235,7 +235,7 @@
         <mxCell id="p6-a" parent="1" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#EDEFF2;strokeColor=#D2D7DE;fontColor=#5A6472;fontSize=12;" value="public" vertex="1">
           <mxGeometry height="26" width="100" x="682" y="415" as="geometry" />
         </mxCell>
-        <mxCell id="p6-p" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=light-dark(#5A6472,#aab3c0);" value="Code → Google token (+ refresh)" vertex="1">
+        <mxCell id="p6-p" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=light-dark(#5A6472,#aab3c0);" value="Code → Okta token (+ refresh)" vertex="1">
           <mxGeometry height="44" width="290" x="840" y="406" as="geometry" />
         </mxCell>
         <mxCell id="h-b-box" parent="1" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#FFF6E9;strokeColor=#E0B057;strokeWidth=2;" value="" vertex="1">
@@ -250,7 +250,7 @@
         <mxCell id="pm-m" parent="1" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#E7F0FF;strokeColor=#A9C4F5;fontColor=#1E52C7;fontSize=12;fontStyle=1;" value="POST" vertex="1">
           <mxGeometry height="26" width="62" x="562" y="525" as="geometry" />
         </mxCell>
-        <mxCell id="pm-a" parent="1" style="rounded=1;arcSize=30;whiteSpace=wrap;html=1;fillColor=#FFE1B0;strokeColor=#E0A040;fontColor=#8A4B00;fontSize=12;fontStyle=1;" value="🔒 Bearer (Google)" vertex="1">
+        <mxCell id="pm-a" parent="1" style="rounded=1;arcSize=30;whiteSpace=wrap;html=1;fillColor=#FFE1B0;strokeColor=#E0A040;fontColor=#8A4B00;fontSize=12;fontStyle=1;" value="🔒 Bearer (Okta)" vertex="1">
           <mxGeometry height="28" width="150" x="682" y="524" as="geometry" />
         </mxCell>
         <mxCell id="pm-p" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=light-dark(#5A6472,#d0b48a);" value="MCP JSON-RPC — runs the ten inventory tools" vertex="1">
