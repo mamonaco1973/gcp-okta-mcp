@@ -16,8 +16,8 @@ resource "random_id" "suffix" {
 # ==============================================================================
 
 resource "google_service_account" "func" {
-  account_id   = "gcp-oauth-mcp-sa"
-  display_name = "GCP OAuth MCP Function SA"
+  account_id   = "gcp-okta-mcp-sa"
+  display_name = "GCP Okta MCP Function SA"
 }
 
 # Viewer on Cloud Asset Inventory — lets the function query all project assets.
@@ -47,7 +47,7 @@ resource "google_project_iam_member" "func_firestore_user" {
 # ==============================================================================
 
 resource "google_storage_bucket" "func_source" {
-  name                        = "gcp-oauth-mcp-src-${random_id.suffix.hex}"
+  name                        = "gcp-okta-mcp-src-${random_id.suffix.hex}"
   location                    = "US"
   force_destroy               = true
   uniform_bucket_level_access = true
@@ -77,12 +77,12 @@ resource "google_storage_bucket_object" "func_source" {
 # ==============================================================================
 
 resource "google_cloudfunctions2_function" "mcp" {
-  name     = "gcp-oauth-mcp-func"
+  name     = "gcp-okta-mcp-func"
   location = var.region
 
   build_config {
     runtime     = "python311"
-    entry_point = "gcp_oauth_mcp"
+    entry_point = "gcp_okta_mcp"
     source {
       storage_source {
         bucket = google_storage_bucket.func_source.name
@@ -100,21 +100,24 @@ resource "google_cloudfunctions2_function" "mcp" {
 
     environment_variables = {
       GOOGLE_CLOUD_PROJECT = local.project_id
-      # The function acts as an OAuth *client* of Google with these. They stay
-      # server-side: the secret is never sent to Claude or to the browser.
-      MCP_GOOGLE_CLIENT_ID = var.google_client_id
+      # The function acts as an OIDC *client* of Okta with client_id; issuer and
+      # audience drive the login URLs (oauth.py) and JWT validation (mcp.py).
+      # These are public; only the client secret below is held server-side.
+      MCP_OKTA_CLIENT_ID = var.okta_client_id
+      MCP_OKTA_ISSUER    = var.okta_issuer
+      MCP_OKTA_AUDIENCE  = var.okta_audience
     }
 
     secret_environment_variables {
-      key        = "MCP_GOOGLE_CLIENT_SECRET"
+      key        = "MCP_OKTA_CLIENT_SECRET"
       project_id = local.project_id
-      secret     = google_secret_manager_secret.google_client_secret.secret_id
+      secret     = google_secret_manager_secret.okta_client_secret.secret_id
       version    = "latest"
     }
   }
 
   depends_on = [
-    google_secret_manager_secret_version.google_client_secret,
+    google_secret_manager_secret_version.okta_client_secret,
     google_secret_manager_secret_iam_member.func_accessor,
   ]
 }

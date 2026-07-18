@@ -14,15 +14,15 @@
 #     WWW-Authenticate header that tells it where to log in.
 #
 # So auth moves into the code: mcp.handle() validates the Bearer token on every
-# call and 401s otherwise. Nothing reaches Cloud Asset Inventory without a
-# Google identity behind it.
+# call and 401s otherwise. Nothing reaches Cloud Asset Inventory without an Okta
+# identity behind it.
 #
 # HTTP surface:
 #   GET  /.well-known/oauth-authorization-server  — RFC 8414 discovery
 #   GET  /.well-known/oauth-protected-resource    — RFC 9728 resource metadata
 #   POST /oauth/register                          — RFC 7591 registration
-#   GET  /authorize                               — redirect to Google login
-#   GET  /oauth/callback                          — Google returns here
+#   GET  /authorize                               — redirect to Okta login
+#   GET  /oauth/callback                          — Okta returns here
 #   POST /oauth/token                             — code / refresh → tokens
 #   POST /mcp                                     — MCP JSON-RPC (auth required)
 # ==============================================================================
@@ -47,7 +47,7 @@ ROUTES = {
 
 
 @functions_framework.http
-def gcp_oauth_mcp(request):
+def gcp_okta_mcp(request):
     """Route an incoming request to the OAuth broker or the MCP endpoint.
 
     Args:

@@ -1,24 +1,24 @@
-# GCP OAuth MCP — a remote MCP server on Cloud Functions, secured with Google OAuth
+# GCP Okta MCP — a remote MCP server on Cloud Functions, secured with Okta OIDC
 
 Connect Claude directly to your GCP resource inventory. No local proxy. No
-service account key file on your laptop. You paste a URL, you log in with
-Google, and the tools work.
+service account key file on your laptop. You paste a URL, you log in through your
+Okta org, and the tools work.
 
-This is the OAuth port of `gcp-serverless-mcp`, which kept the Cloud Function
-private behind Cloud Run IAM and shipped a local proxy that signed OIDC
-assertions with a **downloaded service account private key**. That key was the
-single credential for all MCP access — no expiry, no rotation, no per-user
-identity, sitting in plaintext in a folder.
+This is the **Okta sibling of [`gcp-oauth-mcp`](../gcp-oauth-mcp)**. Same GCP
+host — one public Cloud Function, Firestore, Secret Manager, auth enforced in
+code. The one thing that changes is the upstream identity provider: **Okta
+instead of Google.** It's the bring-your-own-IdP entry in the set — the broker
+pattern works against any compliant OIDC provider, and Okta is the demonstration.
 
-This version deletes it.
-
-| | Proxy build | This build |
+| | `gcp-oauth-mcp` | `gcp-okta-mcp` (this) |
 |---|---|---|
-| Client setup | Install proxy, edit JSON config, hold a key file | Paste one URL |
-| Credential on disk | SA private key, never expires | None |
-| Who is the caller? | Always the same service account | The actual human, via Google |
-| Function exposure | Private (Cloud Run IAM) | Public; the code enforces auth |
-| Auth enforced by | The platform | `mcp.py`, on every call |
+| Upstream IdP | Google (a cloud IdP) | Okta (a vendor-neutral OIDC provider) |
+| Token validation | `tokeninfo` introspection hop, pins `aud` | **Local JWT** vs Okta JWKS, pins `iss` + `aud` + `cid` |
+| Bearer | Google access token (opaque) | Okta access token (**JWT** from the custom AS) |
+| RFC 7591 DCR | Google doesn't implement it | **Okta does** — we still shim it |
+
+The local JWT validation is the real upgrade: no network round-trip on every
+`/mcp` call, and one Okta org means one issuer, so we pin the issuer cleanly.
 
 ---
 
@@ -29,91 +29,82 @@ Claude (claude.ai / Claude Desktop)
      │  1. probe:     POST /mcp with no token → 401 + WWW-Authenticate
      │  2. discover:  GET  /.well-known/oauth-authorization-server   (RFC 8414)
      │  3. register:  POST /oauth/register                           (RFC 7591)
-     │  4. login:     GET  /authorize → accounts.google.com → /oauth/callback
+     │  4. login:     GET  /authorize → <org>.okta.com/oauth2/default → /oauth/callback
      │  5. token:     POST /oauth/token
-     │  6. use:       POST /mcp  (Bearer <google access token>)
+     │  6. use:       POST /mcp  (Bearer <okta access token JWT>)
      ▼
 Cloud Function 2nd Gen — one function, public, auth enforced in code
      ├── oauth.py   OAuth broker  ── Firestore (transient login state, 5-min TTL)
-     ├── mcp.py     JSON-RPC; validates the Bearer token against Google
+     ├── mcp.py     JSON-RPC; validates the Bearer JWT against Okta's JWKS
      └── tools.py   10 Cloud Asset Inventory tools, called in-process
                     ▼
      Cloud Asset Inventory API   ·   Cloud Storage API
 ```
 
 The function plays **two roles at once**. To Claude it *is* the OAuth
-authorization server. To Google it is an ordinary OAuth *client*.
+authorization server. To Okta it is an ordinary OIDC *client*.
 
-### Why a broker, and not just "point Claude at Google"?
+### Why a broker, and not just "point Claude at Okta"?
 
-Two gaps, neither of them ours to fix upstream:
-
-1. **claude.ai's redirect URI is dynamic.** It embeds the org ID —
-   `https://claude.ai/api/organizations/<id>/mcp/callback`. Google requires an
-   exact allow-list match, so you can never register it. The broker registers
+1. **claude.ai's redirect URI is dynamic** — it embeds the org ID. Okta requires
+   an exact allow-list match, so it can never be registered. The broker registers
    only its own fixed `/oauth/callback` and carries Claude's URL through
    Firestore.
+2. **Claude has no `client_id` until something registers it.** Okta *does*
+   implement RFC 7591 — but the broker is the authorization server **to Claude**,
+   so it answers `/oauth/register` itself rather than expose Okta's endpoint and
+   leak the upstream.
 
-2. **Google has no dynamic client registration** (RFC 7591). Without a
-   `/oauth/register` endpoint, Claude has no `client_id` — and the user ends up
-   pasting a client ID and secret by hand.
-
-Roughly 300 lines of `oauth.py` is what stands between "paste a URL" and "paste
-a client ID, a client secret, and hope."
+That second point is the honest twist versus the AWS/GCP/Azure builds: the cloud
+IdPs all skip DCR; the dedicated identity vendors like Okta implement it. The
+gap is a product choice, not a technical impossibility.
 
 ---
 
 ## The tools
 
-| Tool | Operation |
-|---|---|
-| `list_compute_instances` | All VMs with machine type, zone, status |
-| `list_storage_buckets` | All GCS buckets with location and storage class |
-| `count_resources_by_type` | Ranked inventory summary |
-| `find_resources_by_label` | Resources matching a label key+value |
-| `list_static_ip_addresses` | All static external IPs |
-| `find_resources_by_type` | Resources of a specific asset type |
-| `find_resources_by_region` | Resources in a region or zone |
-| `describe_resource` | Full config detail for a named resource |
-| `list_cloud_functions_detail` | Runtime, memory, URL, service account, env vars |
-| `list_bucket_objects` | Objects in a bucket with size and last-modified |
-
-Responses are pre-formatted plain text, not JSON — Cloud Asset Inventory returns
-deeply nested proto structs, and the model narrates a text table far better than
-it parses one.
+Unchanged from the Google build — ten Cloud Asset Inventory tools
+(`list_compute_instances`, `list_storage_buckets`, `count_resources_by_type`,
+`find_resources_by_label`, `list_static_ip_addresses`, `find_resources_by_type`,
+`find_resources_by_region`, `describe_resource`, `list_cloud_functions_detail`,
+`list_bucket_objects`). Responses are pre-formatted plain text.
 
 ---
 
 ## Prerequisites
 
 - `gcloud`, `terraform`, `jq`, `curl` in PATH
-- `credentials.json` (GCP service account key) in the repo root
-- That service account needs: Cloud Functions Admin, Cloud Run Admin, Cloud
-  Build Editor, Artifact Registry Admin, IAM Admin, Cloud Asset Viewer, Storage
-  Admin, Service Account Admin, Project IAM Admin, Secret Manager Admin,
-  Datastore Owner
+- `credentials.json` (GCP service account key) in the repo root, with the same
+  roles the Google build needs (Cloud Functions/Run/Build, Artifact Registry,
+  IAM, Cloud Asset Viewer, Storage, Secret Manager, Datastore Owner)
+- **An Okta org**, and an OIDC app + custom authorization server (below)
 
 ---
 
 ## Deploy
 
-### Step 1 — create the Google OAuth client (once, by hand)
+### Step 1 — create the Okta OIDC app (once, by hand)
 
-Terraform cannot do this for you. `google_iap_client` requires an IAP brand, and
-external brands can only be created in the console. This is the one manual step.
+Terraform does not manage Okta here. In the Okta admin console:
 
-1. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
-2. Application type: **Web application**
-3. Leave the redirect URI blank for now — the function does not exist yet.
-4. Copy the client ID and secret.
+1. **Applications → Create App Integration → OIDC – Web Application.** Grant
+   types: **Authorization Code + Refresh Token**.
+2. Use the custom **"default" authorization server** (Security → API →
+   Authorization Servers). Its issuer is `https://<org>.okta.com/oauth2/default`
+   and its audience is `api://default`. This matters: only a *custom* AS issues
+   **JWT** access tokens we can validate against JWKS — the org AS issues opaque
+   tokens.
+3. Copy the client ID and secret, then export:
 
 ```bash
-export MCP_GOOGLE_CLIENT_ID="123456789-abc.apps.googleusercontent.com"
-export MCP_GOOGLE_CLIENT_SECRET="GOCSPX-..."
+export MCP_OKTA_CLIENT_ID="0oa..."
+export MCP_OKTA_CLIENT_SECRET="..."
+export MCP_OKTA_ISSUER="https://<org>.okta.com/oauth2/default"
+export MCP_OKTA_AUDIENCE="api://default"   # optional; this is the default
 ```
 
-`check_env.sh` hard-fails if either is missing — Google sign-in is not an
-optional extra here, it *is* the authentication.
+`check_env.sh` hard-fails if the first three are missing and also confirms the
+issuer resolves.
 
 ### Step 2 — apply
 
@@ -121,27 +112,15 @@ optional extra here, it *is* the authentication.
 ./apply.sh
 ```
 
-When it finishes it prints the **authorized redirect URI**. Paste that back onto
-the OAuth client in the console.
+When it finishes it prints the **sign-in redirect URI**. Add that to the Okta
+app under *Sign-in redirect URIs*. The function name is **not randomised**, so
+the URI is stable — you do this once, not after every rebuild.
 
-The function name is **not randomised**, so that URI is stable — you do this
-once, not after every rebuild.
-
-### Step 3 — publish the consent screen
-
-Confirm the OAuth consent screen is **Published**, not "Testing". In Testing mode
-refresh tokens expire after 7 days and only allow-listed users can sign in.
-
-Publishing needs **no Google verification review**: `openid`, `email`, and
-`profile` are all non-sensitive scopes. It is a button, not an audit.
-
-### Step 4 — connect Claude
+### Step 3 — connect Claude
 
 **Settings → Connectors → Add custom connector**, and paste the `/mcp` URL that
-`apply.sh` printed.
-
-That is the entire configuration. Claude discovers the authorization server,
-registers itself, and sends you to Google to log in.
+`apply.sh` printed. Claude discovers the authorization server, registers itself,
+and sends you to Okta to log in. That is the entire configuration.
 
 ```bash
 ./validate.sh   # smoke-test the handshake and the auth boundary
@@ -152,41 +131,41 @@ registers itself, and sends you to Google to log in.
 
 ## Security — what this does and does not do
 
-**It authenticates. It does not authorize.**
+**It authenticates. It does not authorize.** Every authenticated Okta user is
+authorized; there is no allow-list. To lock it down, filter on `sub` (or a group
+/ custom claim) in `mcp._resolve_user`.
 
-Every authenticated Google user is authorized. There is no allow-list. Anyone
-with a Google account who reaches the endpoint can read this project's resource
-inventory. That is an acceptable trade in a demo and a bad one anywhere else —
-to lock it down, filter on the `email` or `hd` claim in `mcp._resolve_user`.
+Three things this build gets right:
 
-Three things this build does get right, and they are worth understanding:
+**The token is validated locally, and pinned three ways.** `_resolve_user`
+verifies the RS256 signature against Okta's JWKS and requires `iss`, `aud`, and
+`cid` to match. `aud = api://default` is shared by every client on that
+authorization server, so the `cid` (requesting client) pin is what makes the
+token *ours*, not just any token for the API.
 
-**The token's audience is pinned.** `_resolve_user` rejects any token whose `aud`
-is not our own `client_id`. This is not optional paranoia: a naive `/userinfo`
-check accepts a valid Google token minted for *any* application on the internet,
-which would let an unrelated app's token call these tools.
-
-**The client secret lives in Secret Manager**, not a plain environment variable —
-because `list_cloud_functions_detail` prints function environment variables. A
+**The client secret lives in Secret Manager**, not a plain env var — because
+`list_cloud_functions_detail` prints function environment variables, so a
 plaintext secret would be readable through the very tools it protects.
 
 **The function is public, and that is correct.** `allUsers` holds
-`roles/run.invoker`. The OAuth endpoints cannot require a token — obtaining one
-is their job — and Claude probes `/mcp` unauthenticated on purpose to read the
-`WWW-Authenticate` header. An IAM check would break the handshake before any code
-ran. So the door opens, and `mcp.py` enforces the token instead.
+`roles/run.invoker`. The OAuth endpoints can't require a token, and Claude probes
+`/mcp` unauthenticated on purpose to read the `WWW-Authenticate` header. The door
+opens, and `mcp.py` enforces the token instead.
 
 ---
 
 ## Gotchas
 
-- **Google access tokens last one hour**, and that is not configurable. The
-  `refresh_token` grant is mandatory here (the Cognito equivalent could skip it —
-  Cognito allows a 24-hour access token).
-- **`prompt=consent` in `/authorize` is load-bearing.** Without it Google omits the
-  refresh token for a user who already granted access, and the connector dies
-  silently after an hour.
-- **`redirect_uri_mismatch` at login** means the URI `apply.sh` printed is not on
-  the OAuth client. It is the single most likely thing to go wrong.
+- **Use the custom AS, not the org AS.** Only `.../oauth2/default` (or another
+  custom AS) issues JWT access tokens with `aud = api://default`. The org AS
+  (`https://<org>.okta.com`) issues opaque tokens that won't validate against
+  JWKS. `variables.tf` enforces the issuer shape.
+- **`offline_access` yields the refresh token** — it's the Okta equivalent of
+  Google's `access_type=offline` + `prompt=consent`. Without it the connector
+  dies when the access token expires.
+- **Okta rotates refresh tokens by default**, so the token endpoint returns a new
+  one on refresh; `_refresh` echoes back whichever it gets.
+- **`redirect_uri` mismatch at login** means the URI `apply.sh` printed isn't on
+  the Okta app's sign-in redirect URIs. Most likely thing to go wrong.
 - **Don't randomise the function name.** The URL derives from it, and that URL is
   the registered redirect URI.

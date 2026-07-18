@@ -1,36 +1,50 @@
 # ==============================================================================
-# Google OAuth client credentials
+# Okta OIDC client credentials + custom authorization server
 #
-# Terraform cannot create an external OAuth 2.0 client — google_iap_client
-# requires an IAP brand, and external brands can only be created in the console.
-# So the client is made by hand once and passed in here.
+# The OIDC app is created by hand once in the Okta admin console (Terraform does
+# not manage Okta here — no Okta provider). These values come from that app and
+# are passed in by apply.sh from the MCP_OKTA_* environment variables.
 #
-# There is no default. Google sign-in is not an optional add-on in this build,
-# it IS the authentication — a missing value must fail the apply, not quietly
-# deploy a stack that cannot authenticate anyone.
-#
-# Supplied by apply.sh from MCP_GOOGLE_CLIENT_ID / MCP_GOOGLE_CLIENT_SECRET.
+# There are no defaults on the required three: Okta sign-in IS the
+# authentication, so a missing value must fail the apply rather than deploy a
+# stack that cannot authenticate anyone.
 # ==============================================================================
 
-variable "google_client_id" {
-  description = "Google OAuth 2.0 client ID — the function is an OAuth client of Google"
+variable "okta_client_id" {
+  description = "Okta OIDC app client ID — the function is an OIDC client of Okta"
   type        = string
 
   validation {
-    condition     = length(var.google_client_id) > 0
-    error_message = "google_client_id is required. Export MCP_GOOGLE_CLIENT_ID."
+    condition     = length(var.okta_client_id) > 0
+    error_message = "okta_client_id is required. Export MCP_OKTA_CLIENT_ID."
   }
 }
 
-variable "google_client_secret" {
-  description = "Google OAuth 2.0 client secret — server-side only, never sent to the MCP client"
+variable "okta_client_secret" {
+  description = "Okta OIDC app client secret — server-side only, never sent to the MCP client"
   type        = string
   sensitive   = true
 
   validation {
-    condition     = length(var.google_client_secret) > 0
-    error_message = "google_client_secret is required. Export MCP_GOOGLE_CLIENT_SECRET."
+    condition     = length(var.okta_client_secret) > 0
+    error_message = "okta_client_secret is required. Export MCP_OKTA_CLIENT_SECRET."
   }
+}
+
+variable "okta_issuer" {
+  description = "Okta custom authorization-server issuer, e.g. https://<org>.okta.com/oauth2/default"
+  type        = string
+
+  validation {
+    condition     = can(regex("^https://.+/oauth2/.+$", var.okta_issuer))
+    error_message = "okta_issuer must be a custom AS issuer like https://<org>.okta.com/oauth2/default. Export MCP_OKTA_ISSUER."
+  }
+}
+
+variable "okta_audience" {
+  description = "Audience of the Okta custom AS access tokens (the API the token is for)"
+  type        = string
+  default     = "api://default"
 }
 
 variable "region" {

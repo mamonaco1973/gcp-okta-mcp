@@ -3,9 +3,10 @@
 # File: check_env.sh
 #
 # Purpose:
-#   Pre-flight validation: verifies required tools are in PATH, that the Google
-#   OAuth client credentials are exported, that credentials.json exists,
-#   authenticates the gcloud SA, and enables required APIs via api_setup.sh.
+#   Pre-flight validation: verifies required tools are in PATH, that the Okta
+#   OIDC app credentials + issuer are exported, that the issuer is reachable,
+#   that credentials.json exists, authenticates the gcloud SA, and enables the
+#   required GCP APIs via api_setup.sh.
 # ==============================================================================
 
 set -euo pipefail
@@ -31,15 +32,15 @@ done
 [ "$all_found" = true ] || exit 1
 
 # ==============================================================================
-# Google OAuth client check
+# Okta OIDC app check
 #
-# Terraform cannot create an external OAuth client, so these must be supplied.
-# Fail loudly here rather than letting the apply get halfway and produce a
-# stack that deploys cleanly but cannot authenticate anyone.
+# Terraform does not manage Okta here, so the app is created by hand once and its
+# values exported. Fail loudly rather than deploy a stack that cannot
+# authenticate anyone. MCP_OKTA_AUDIENCE is optional (defaults to api://default).
 # ==============================================================================
 
 missing=0
-for var in MCP_GOOGLE_CLIENT_ID MCP_GOOGLE_CLIENT_SECRET; do
+for var in MCP_OKTA_CLIENT_ID MCP_OKTA_CLIENT_SECRET MCP_OKTA_ISSUER; do
     if [[ -z "${!var:-}" ]]; then
         echo "ERROR: ${var} is not set."
         missing=1
@@ -50,30 +51,66 @@ if [[ "$missing" -eq 1 ]]; then
     cat <<'EOF'
 
 --------------------------------------------------------------------------------
-This project needs a Google OAuth 2.0 client. Terraform cannot create one:
-google_iap_client requires an IAP brand, and external brands are console-only.
-So you create it once, by hand, and export it.
+This project needs an Okta OIDC application and a custom authorization server.
+Create them once in the Okta admin console, then export the values:
 
-  1. APIs & Services -> Credentials -> Create Credentials
-     -> OAuth client ID -> Application type: Web application
+  1. Applications -> Create App Integration -> OIDC - Web Application
+     Grant types: Authorization Code + Refresh Token.
 
-  2. Export both values, then re-run:
+  2. Security -> API -> Authorization Servers -> use "default"
+     (issuer https://<org>.okta.com/oauth2/default, audience api://default).
 
-       export MCP_GOOGLE_CLIENT_ID="123456789-abc.apps.googleusercontent.com"
-       export MCP_GOOGLE_CLIENT_SECRET="GOCSPX-..."
+  3. Export, then re-run:
+
+       export MCP_OKTA_CLIENT_ID="0oa..."
+       export MCP_OKTA_CLIENT_SECRET="..."
+       export MCP_OKTA_ISSUER="https://<org>.okta.com/oauth2/default"
+       export MCP_OKTA_AUDIENCE="api://default"   # optional
        ./apply.sh
 
-  3. On the FIRST apply the function URL does not exist yet, so leave the
-     redirect URI blank for now. apply.sh prints the exact URI to paste back
-     onto the client when it finishes. The function name is not randomised, so
-     that URI is stable — you only ever do this once.
+  4. On the FIRST apply the function URL does not exist yet, so leave the
+     sign-in redirect URI blank for now. apply.sh prints the exact URI to add to
+     the Okta app when it finishes. The function name is not randomised, so that
+     URI is stable — you only ever do this once.
 --------------------------------------------------------------------------------
 
 EOF
     exit 1
 fi
 
-echo "NOTE: Google OAuth client ID: ${MCP_GOOGLE_CLIENT_ID}"
+echo "NOTE: Okta client ID: ${MCP_OKTA_CLIENT_ID}"
+echo "NOTE: Okta issuer:    ${MCP_OKTA_ISSUER}"
+
+# ------------------------------------------------------------------------------
+# Issuer reachability — confirm the custom AS metadata resolves. Catches typos
+# in the issuer and connectivity problems before the apply, the way the Azure
+# build validated its tenant/user flow up front. Retried for transient blips.
+# ------------------------------------------------------------------------------
+
+_validate_issuer() {
+    local meta
+    meta=$(curl -s "${MCP_OKTA_ISSUER}/.well-known/oauth-authorization-server")
+    local auth_ep
+    auth_ep=$(echo "$meta" | jq -r '.authorization_endpoint // empty')
+    if [[ -z "$auth_ep" ]]; then
+        echo "WARNING: Could not read authorization metadata from the issuer."
+        return 1
+    fi
+    echo "NOTE: Okta authorization server reachable (authorize: ${auth_ep})."
+}
+
+for _attempt in 1 2 3; do
+    if _validate_issuer; then
+        break
+    fi
+    if [[ "$_attempt" -lt 3 ]]; then
+        echo "NOTE: Retrying issuer check in 5s (${_attempt}/3)..."
+        sleep 5
+    else
+        echo "ERROR: Okta issuer ${MCP_OKTA_ISSUER} is not reachable or not a valid custom AS."
+        exit 1
+    fi
+done
 
 # ==============================================================================
 # Credentials check

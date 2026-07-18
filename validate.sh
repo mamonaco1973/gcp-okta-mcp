@@ -6,8 +6,8 @@
 #   Smoke-tests the public HTTP surface without any credentials.
 #
 #   The proxy build could call every tool from a script, because the script held
-#   a service account key. That key is gone — tools now require a real Google
-#   user token, which only a browser login can produce. So this script validates
+#   a service account key. That key is gone — tools now require a real Okta user
+#   token, which only a browser login can produce. So this script validates
 #   what a script legitimately can, and that turns out to be the part that
 #   matters most: that the OAuth handshake works and that the auth boundary
 #   actually holds.
@@ -91,7 +91,7 @@ echo "NOTE: Validating the auth boundary..."
 echo ""
 
 # ------------------------------------------------------------------------------
-# The tools must be unreachable without a valid Google token. A 200 from either
+# The tools must be unreachable without a valid Okta token. A 200 from either
 # of these would mean the whole thing is wide open.
 # ------------------------------------------------------------------------------
 

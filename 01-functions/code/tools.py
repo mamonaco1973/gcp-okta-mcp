@@ -155,7 +155,7 @@ TOOL_REGISTRY = [
                     "type": "string",
                     "description": (
                         "Display name or partial name of the resource "
-                        "to look up, e.g. 'gcp-oauth-mcp-func'"
+                        "to look up, e.g. 'gcp-okta-mcp-func'"
                     ),
                 },
             },

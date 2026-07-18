@@ -7,7 +7,7 @@
 #   validation -> connector instructions.
 #
 #   There is no key export and no Claude Desktop config generation here. That is
-#   the point of this build: users authenticate as themselves through Google, so
+#   the point of this build: users authenticate as themselves through Okta, so
 #   there is nothing to hand them but a URL.
 # ==============================================================================
 
@@ -25,8 +25,10 @@ echo "NOTE: Deploying GCP infrastructure..."
 cd 01-functions
 terraform init -upgrade
 terraform apply -auto-approve \
-    -var="google_client_id=${MCP_GOOGLE_CLIENT_ID}" \
-    -var="google_client_secret=${MCP_GOOGLE_CLIENT_SECRET}"
+    -var="okta_client_id=${MCP_OKTA_CLIENT_ID}" \
+    -var="okta_client_secret=${MCP_OKTA_CLIENT_SECRET}" \
+    -var="okta_issuer=${MCP_OKTA_ISSUER}" \
+    -var="okta_audience=${MCP_OKTA_AUDIENCE:-api://default}"
 
 MCP_URL=$(terraform output -raw mcp_url)
 REDIRECT_URI=$(terraform output -raw oauth_redirect_uri)
@@ -54,10 +56,10 @@ cat <<EOF
   Deployment complete.
 ================================================================================
 
-  STEP 1 — one time, in the Cloud Console
-  ---------------------------------------
-  APIs & Services -> Credentials -> your OAuth 2.0 client
-  Add this under "Authorized redirect URIs":
+  STEP 1 — one time, in the Okta admin console
+  --------------------------------------------
+  Applications -> your OIDC app -> General -> Sign-in redirect URIs
+  Add:
 
       ${REDIRECT_URI}
 
@@ -69,7 +71,7 @@ cat <<EOF
 
   That is the whole configuration. No client ID, no secret, no key file, and
   no local proxy. Claude discovers the authorization server, registers itself,
-  and sends you to Google to log in.
+  and sends you to Okta to log in.
 
 ================================================================================
 EOF

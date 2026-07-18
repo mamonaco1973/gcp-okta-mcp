@@ -2,3 +2,5 @@ functions-framework==3.*
 google-cloud-asset
 google-cloud-storage
 google-cloud-firestore
+PyJWT
+cryptography

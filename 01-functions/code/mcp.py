@@ -19,22 +19,38 @@
 import json
 import logging
 import os
-import urllib.parse
 import urllib.request
+
+import jwt
+from jwt.algorithms import RSAAlgorithm
 
 import tools
 from oauth import _api_base
 
 logger = logging.getLogger(__name__)
 
-# Returns the token's audience and the user's identity in one call. We use this
-# rather than /userinfo because /userinfo happily accepts a token minted for
-# *any* Google OAuth client — see _resolve_user.
-GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+# Okta custom-AS coordinates. The access token is a JWT signed by this issuer;
+# we validate it locally against the issuer's JWKS — no introspection hop, which
+# is the upgrade over the Google build's tokeninfo call.
+OKTA_ISSUER    = os.environ.get("MCP_OKTA_ISSUER", "").rstrip("/")
+OKTA_AUDIENCE  = os.environ.get("MCP_OKTA_AUDIENCE", "api://default")
+OKTA_CLIENT_ID = os.environ.get("MCP_OKTA_CLIENT_ID", "")
+JWKS_URL       = f"{OKTA_ISSUER}/v1/keys"
 
 SERVER_NAME     = "gcp-resource-mcp"
 SERVER_VERSION  = "2.0.0"
 DEFAULT_PROTOCOL = "2025-06-18"
+
+_jwks_cache = None
+
+
+def _get_jwks() -> dict:
+    """Fetch and cache Okta's JWKS for signature validation."""
+    global _jwks_cache
+    if _jwks_cache is None:
+        with urllib.request.urlopen(JWKS_URL, timeout=10) as resp:  # nosec B310
+            _jwks_cache = json.loads(resp.read())
+    return _jwks_cache
 
 
 # ==============================================================================
@@ -42,32 +58,43 @@ DEFAULT_PROTOCOL = "2025-06-18"
 # ==============================================================================
 
 def _resolve_user(token: str) -> dict:
-    """Validate a Google access token and return its claims.
+    """Validate an Okta access-token JWT and return its claims.
 
     Args:
         token: The raw Bearer token from the Authorization header.
 
     Returns:
-        The tokeninfo claims dict, or {} if the token is invalid, expired, or
-        was issued to a different OAuth client.
+        The token claims, or {} if the token is invalid, expired, issued by a
+        different issuer/audience, or requested by a different client.
     """
-    url = f"{GOOGLE_TOKENINFO_URL}?" + urllib.parse.urlencode(
-        {"access_token": token}
-    )
     try:
-        with urllib.request.urlopen(url, timeout=10) as resp:  # nosec B310
-            claims = json.loads(resp.read())
+        header   = jwt.get_unverified_header(token)
+        jwks     = _get_jwks()
+        key_data = next(
+            (k for k in jwks["keys"] if k["kid"] == header.get("kid")), None
+        )
+        if key_data is None:
+            return {}
+        public_key = RSAAlgorithm.from_jwk(json.dumps(key_data))
+        # Signature + issuer + audience are all pinned. One Okta org means one
+        # issuer, so unlike the multitenant builds we can pin iss cleanly.
+        claims = jwt.decode(
+            token,
+            public_key,
+            algorithms=["RS256"],
+            audience=OKTA_AUDIENCE,
+            issuer=OKTA_ISSUER,
+        )
     except Exception:
         logger.info("Token validation failed")
         return {}
 
-    # Critical: a valid Google token is not automatically a token for US. Any
-    # app on the internet can mint one, and it would sail through a plain
-    # /userinfo check. Pinning the audience to our own client_id is what stops
-    # a token issued to some other application from calling these tools.
-    expected = os.environ.get("MCP_GOOGLE_CLIENT_ID", "")
-    if claims.get("aud") != expected:
-        logger.warning("Token audience mismatch — rejecting")
+    # aud=api://default is shared by every client hitting this AS, so it does not
+    # by itself prove the token was minted for US. The cid claim (the client that
+    # requested the token) is what pins it to our own app — the equivalent of the
+    # Google build's aud==client_id check.
+    if claims.get("cid") != OKTA_CLIENT_ID:
+        logger.warning("Token cid mismatch — rejecting")
         return {}
 
     return claims
@@ -157,7 +184,8 @@ def handle(request):
     req_id = payload.get("id")
     params = payload.get("params") or {}
 
-    logger.info("mcp: user=%s method=%s", claims.get("email", "unknown"), method)
+    # Okta access-token subject is the user's login; email may be absent.
+    logger.info("mcp: user=%s method=%s", claims.get("sub", "unknown"), method)
 
     # Notifications carry no id and expect no response body.
     if req_id is None and method.startswith("notifications/"):

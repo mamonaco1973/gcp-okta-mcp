@@ -18,8 +18,10 @@ echo "NOTE: Destroying GCP infrastructure..."
 cd 01-functions
 terraform init -upgrade
 terraform destroy -auto-approve \
-    -var="google_client_id=${MCP_GOOGLE_CLIENT_ID}" \
-    -var="google_client_secret=${MCP_GOOGLE_CLIENT_SECRET}"
+    -var="okta_client_id=${MCP_OKTA_CLIENT_ID}" \
+    -var="okta_client_secret=${MCP_OKTA_CLIENT_SECRET}" \
+    -var="okta_issuer=${MCP_OKTA_ISSUER}" \
+    -var="okta_audience=${MCP_OKTA_AUDIENCE:-api://default}"
 cd ..
 
 cat <<'EOF'

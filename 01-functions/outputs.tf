@@ -9,7 +9,7 @@ output "mcp_url" {
 }
 
 output "oauth_redirect_uri" {
-  description = "Authorized redirect URI to register on the Google OAuth client."
+  description = "Sign-in redirect URI to register on the Okta OIDC app."
   value       = "${google_cloudfunctions2_function.mcp.service_config[0].uri}/oauth/callback"
 }
 

@@ -6,34 +6,41 @@
 # This function plays two roles at once:
 #   * To Claude, it IS the authorization server — it serves discovery, dynamic
 #     client registration, /authorize and /oauth/token.
-#   * To Google, it is an ordinary OAuth *client* — it redirects to Google's
-#     login, receives the code at a fixed callback, and exchanges it.
+#   * To Okta, it is an ordinary OIDC *client* — it redirects to Okta's login,
+#     receives the code at a fixed callback, and exchanges it.
 #
-# Why broker at all? Two gaps, and neither is ours to fix upstream:
+# Why broker at all? Two gaps:
 #   1. claude.ai's redirect_uri embeds the org ID
-#      (https://claude.ai/api/organizations/<id>/mcp/callback). Google requires
-#      an exact allow-list match, so we cannot register it. We register only our
-#      own fixed /oauth/callback and carry Claude's URL through in `state`.
-#   2. Google does not implement RFC 7591 dynamic client registration. Without
-#      /oauth/register, Claude would have no client_id and the user would have
-#      to paste credentials by hand.
+#      (https://claude.ai/api/organizations/<id>/mcp/callback). Okta requires an
+#      exact allow-list match, so we cannot register it. We register only our own
+#      fixed /oauth/callback and carry Claude's URL through in `state`.
+#   2. Claude has no client_id until something registers it. Okta actually DOES
+#      implement RFC 7591 dynamic client registration (unlike the cloud IdPs) —
+#      but the broker is still the authorization server *to Claude*, so we keep
+#      the /oauth/register shim rather than exposing Okta's registration endpoint
+#      and leaking the upstream. The shim hands back our one shared client_id.
+#
+# We talk to Okta's custom "default" authorization server
+# (https://<org>.okta.com/oauth2/default), whose access tokens are real JWTs with
+# aud = api://default and iss = the issuer. That is what lets mcp.py validate the
+# token locally against Okta's JWKS instead of calling an introspection endpoint.
 #
 # Flow:
 #   1. GET  /.well-known/oauth-authorization-server — we are the auth server
 #   2. POST /oauth/register  — hand back our shared client_id (RFC 7591)
-#   3. GET  /authorize      — stash Claude's redirect_uri + state, 302 to Google
-#   4. GET  /oauth/callback — Google returns here; swap code for tokens, mint a
+#   3. GET  /authorize      — stash Claude's redirect_uri + state, 302 to Okta
+#   4. GET  /oauth/callback — Okta returns here; swap code for tokens, mint a
 #                             one-time gcp_ code, 302 back to Claude
-#   5. POST /oauth/token    — gcp_ code → Google access token (+ refresh token)
-#   6. POST /mcp            — Bearer is a real Google access token, validated in
-#                             mcp.py against Google's tokeninfo endpoint
+#   5. POST /oauth/token    — gcp_ code → Okta access token (+ refresh token)
+#   6. POST /mcp            — Bearer is a real Okta access-token JWT, validated in
+#                             mcp.py against Okta's JWKS (issuer + audience pinned)
 #
-# The token handed to Claude is a genuine Google access token. We mint no JWTs
-# and hold no signing keys — there is no custom crypto anywhere in this file.
+# The token handed to Claude is a genuine Okta access token. We mint no JWTs and
+# hold no signing keys — there is no custom crypto in this file.
 #
 # Firestore records (5-min TTL, swept by a Firestore TTL policy on expires_at):
 #   mcp_pending_auth/<session>  — Claude's redirect_uri + state, pre-login
-#   mcp_auth_codes/<gcp_ code>  — Google tokens, one-time use, post-login
+#   mcp_auth_codes/<gcp_ code>  — Okta tokens, one-time use, post-login
 # ==============================================================================
 
 import json
@@ -48,14 +55,17 @@ from google.cloud import firestore
 
 logger = logging.getLogger(__name__)
 
-# Google's OAuth endpoints. Fixed, public, and not user-controlled — the
-# urlopen calls below are safe by construction.
-GOOGLE_AUTH_URL     = "https://accounts.google.com/o/oauth2/v2/auth"
-GOOGLE_TOKEN_URL    = "https://oauth2.googleapis.com/token"
+# Okta's OIDC endpoints, built from the custom-AS issuer (e.g.
+# https://<org>.okta.com/oauth2/default). Fixed once the issuer is set, public,
+# and not user-controlled — the urlopen calls below are safe by construction.
+OKTA_ISSUER    = os.environ.get("MCP_OKTA_ISSUER", "").rstrip("/")
+OKTA_AUTH_URL  = f"{OKTA_ISSUER}/v1/authorize"
+OKTA_TOKEN_URL = f"{OKTA_ISSUER}/v1/token"
 
-# Scopes we ask Google for. All three are non-sensitive, which is what keeps the
-# consent screen out of Google's verification review — see README.
-GOOGLE_SCOPES       = "openid email profile"
+# Scopes we ask Okta for. openid/email/profile identify the user; offline_access
+# is what yields a refresh token (Okta's equivalent of Google's access_type
+# =offline + prompt=consent).
+OKTA_SCOPES = "openid email profile offline_access"
 
 PENDING_TTL_SECONDS = 300   # 5 minutes, for both pending-auth and auth-code docs
 
@@ -73,11 +83,11 @@ def _firestore() -> firestore.Client:
 
 
 def _client_id() -> str:
-    return os.environ.get("MCP_GOOGLE_CLIENT_ID", "")
+    return os.environ.get("MCP_OKTA_CLIENT_ID", "")
 
 
 def _client_secret() -> str:
-    return os.environ.get("MCP_GOOGLE_CLIENT_SECRET", "")
+    return os.environ.get("MCP_OKTA_CLIENT_SECRET", "")
 
 
 # ==============================================================================
@@ -125,7 +135,7 @@ def _post_form(url: str, fields: dict) -> dict:
     """POST a form-encoded body and parse the JSON response.
 
     Args:
-        url:    Target endpoint (always a fixed Google URL — see module header).
+        url:    Target endpoint (always a fixed Okta URL — see module header).
         fields: Form fields to send.
 
     Returns:
@@ -168,9 +178,9 @@ def parse_form_body(request) -> dict:
 def authorization_server_metadata(request):
     """Advertise this function as the OAuth authorization server.
 
-    Every endpoint here points at us, not at Google. Claude never learns that
-    Google is behind the curtain, which is exactly what lets us paper over
-    Google's missing dynamic client registration.
+    Every endpoint here points at us, not at Okta. Claude never learns that Okta
+    is behind the curtain — which is what lets the broker stay the single
+    authorization server the connector talks to.
     """
     base = _api_base(request)
     return _json({
@@ -209,9 +219,10 @@ def protected_resource_metadata(request):
 def register(request):
     """Hand back the shared client_id so Claude can self-register.
 
-    Google has no DCR endpoint of its own, so this is the shim that keeps the
-    user experience to "paste a URL". We return auth method "none": the real
-    Google client secret stays server-side and is never sent to the client.
+    Okta does implement RFC 7591, but the broker is the authorization server to
+    Claude, so we answer registration ourselves rather than proxy Okta's
+    endpoint. We return auth method "none": the real Okta client secret stays
+    server-side and is never sent to the client.
     """
     base = _api_base(request)
     return _json({
@@ -228,11 +239,11 @@ def register(request):
 # ==============================================================================
 
 def authorize(request):
-    """Stash Claude's callback details, then send the browser to Google.
+    """Stash Claude's callback details, then send the browser to Okta.
 
-    Google only ever sees our own fixed /oauth/callback as the redirect_uri.
+    Okta only ever sees our own fixed /oauth/callback as the redirect_uri.
     Claude's dynamic URL rides along in Firestore, keyed by the session id we
-    pass to Google as `state`.
+    pass to Okta as `state`.
     """
     redirect_uri  = (request.args.get("redirect_uri")  or "").strip()
     state         = request.args.get("state")          or ""
@@ -245,7 +256,7 @@ def authorize(request):
 
     # PKCE params from Claude are accepted and ignored: the code we hand back is
     # single-use and consumed server-side, so there is no interception window
-    # for PKCE to close. Google's own leg of the flow is protected by the client
+    # for PKCE to close. Okta's own leg of the flow is protected by the client
     # secret instead.
     session_id = secrets.token_urlsafe(16)
     _firestore().collection(COLLECTION_PENDING).document(session_id).set({
@@ -254,21 +265,16 @@ def authorize(request):
         "expires_at":   _expiry(),
     })
 
-    google_auth = f"{GOOGLE_AUTH_URL}?" + urllib.parse.urlencode({
+    okta_auth = f"{OKTA_AUTH_URL}?" + urllib.parse.urlencode({
         "client_id":     _client_id(),
         "response_type": "code",
-        "scope":         GOOGLE_SCOPES,
+        "scope":         OKTA_SCOPES,
         "redirect_uri":  f"{_api_base(request)}/oauth/callback",
         "state":         session_id,
-        # offline + consent guarantee a refresh_token on every authorization.
-        # Without prompt=consent Google omits it for a user who has already
-        # granted access, and the connector would silently die after one hour.
-        "access_type":   "offline",
-        "prompt":        "consent",
     })
 
     logger.info("authorize: session=%s", session_id)
-    return _redirect(google_auth)
+    return _redirect(okta_auth)
 
 
 # ==============================================================================
@@ -276,11 +282,11 @@ def authorize(request):
 # ==============================================================================
 
 def callback(request):
-    """Exchange Google's code for tokens, then hand Claude a one-time code."""
-    google_code = (request.args.get("code")  or "").strip()
-    session_id  = (request.args.get("state") or "").strip()
+    """Exchange Okta's code for tokens, then hand Claude a one-time code."""
+    okta_code  = (request.args.get("code")  or "").strip()
+    session_id = (request.args.get("state") or "").strip()
 
-    if not google_code or not session_id:
+    if not okta_code or not session_id:
         return _error("invalid_request", 400)
 
     db          = _firestore()
@@ -295,19 +301,19 @@ def callback(request):
         pending_ref.delete()
         return _error("invalid_state", 400)
 
-    tokens = _post_form(GOOGLE_TOKEN_URL, {
+    tokens = _post_form(OKTA_TOKEN_URL, {
         "grant_type":    "authorization_code",
-        "code":          google_code,
+        "code":          okta_code,
         "client_id":     _client_id(),
         "client_secret": _client_secret(),
         "redirect_uri":  f"{_api_base(request)}/oauth/callback",
     })
 
     if "access_token" not in tokens:
-        logger.error("Google token exchange returned no access_token")
-        return _error("google_exchange_failed", 502)
+        logger.error("Okta token exchange returned no access_token")
+        return _error("okta_exchange_failed", 502)
 
-    # Mint a one-time code and stash the Google tokens behind it. Claude will
+    # Mint a one-time code and stash the Okta tokens behind it. Claude will
     # trade this for the real tokens at /oauth/token in the next request.
     auth_code = "gcp_" + secrets.token_urlsafe(32)
     db.collection(COLLECTION_CODES).document(auth_code).set({
@@ -337,11 +343,10 @@ def token(request):
     """Issue tokens to Claude.
 
     Two grants:
-      authorization_code — trade the one-time gcp_ code for the Google tokens
-      refresh_token      — Google access tokens last one hour and that is not
-                           configurable, so refresh is mandatory here. (The
-                           Cognito build could skip it: Cognito allows a 24-hour
-                           access token.)
+      authorization_code — trade the one-time gcp_ code for the Okta tokens
+      refresh_token      — Okta access tokens are short-lived, so refresh is
+                           required. offline_access (requested in authorize) is
+                           what makes the refresh_token available.
     """
     params     = parse_form_body(request)
     grant_type = params.get("grant_type", "")
@@ -383,21 +388,22 @@ def token(request):
 
 
 def _refresh(params: dict):
-    """Exchange a Google refresh token for a fresh access token.
+    """Exchange an Okta refresh token for a fresh access token.
 
-    Google does not return a new refresh_token on refresh, so we echo the
-    client's back to it — otherwise Claude would drop the only copy and be
-    unable to refresh again.
+    Okta rotates refresh tokens by default, so echo back whichever token the
+    response carries — the new one if Okta rotated, else the client's own —
+    otherwise Claude would drop the only valid copy and be unable to refresh.
     """
     refresh_token = (params.get("refresh_token") or "").strip()
     if not refresh_token:
         return _error("invalid_request", 400)
 
-    tokens = _post_form(GOOGLE_TOKEN_URL, {
+    tokens = _post_form(OKTA_TOKEN_URL, {
         "grant_type":    "refresh_token",
         "refresh_token": refresh_token,
         "client_id":     _client_id(),
         "client_secret": _client_secret(),
+        "scope":         OKTA_SCOPES,
     })
 
     if "access_token" not in tokens:
@@ -407,5 +413,5 @@ def _refresh(params: dict):
         "access_token":  tokens["access_token"],
         "token_type":    "Bearer",
         "expires_in":    tokens.get("expires_in", 3600),
-        "refresh_token": refresh_token,
+        "refresh_token": tokens.get("refresh_token", refresh_token),
     })
