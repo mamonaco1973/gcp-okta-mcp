@@ -1,39 +1,45 @@
-#GCP #MCP #CloudFunctions #Serverless #Terraform
+#GCP #MCP #CloudFunctions #OAuth #Okta #ClaudeAI
 
-*Build a Serverless MCP Backend using Google Cloud*
+*Build a Claude Connector on Google Cloud with Okta OIDC*
 
-In this project we build a reusable MCP backend pattern on GCP: Cloud Function handlers behind an HTTP API secured with GCP OIDC authentication, bridged to any MCP client by a lightweight stdio proxy that acquires and caches OIDC tokens automatically.
+Connect Claude directly to your Google Cloud project. No local proxy. No service account key file on your laptop. You paste one URL, sign in through Okta, and the tools work.
 
-The proxy makes the remote GCP backend look like a local tool server. The AI never knows the difference. We use Cloud Asset Inventory as the example backend — but the pattern works for any Cloud Function-backed tool set.
+In this project we put ten Cloud Asset Inventory tools behind a single Cloud Function, and secure it with Okta OIDC. The function is public, and it enforces the token itself — the login routes have to be reachable before a token exists, so authentication moves into the code. Claude discovers the login, registers itself, and sends you to your Okta org. Nothing to configure but the URL.
 
-The proxy itself contains zero tool-specific logic. It self-configures at startup by calling a /tools discovery endpoint, so you can add or remove tools without touching the proxy at all. Point it at a different endpoint and you have a completely different tool set.
+This is the Okta sibling of the Google-login build. Same GCP host — one public Cloud Function, Firestore, Secret Manager. The one thing that changes is the identity provider: Okta instead of Google. It's the bring-your-own-IdP entry — the broker pattern works against any compliant OIDC provider, and Okta is the demonstration.
 
-This pattern works with Claude Desktop, OpenAI Codex, Cursor, and any other MCP client that supports stdio transport.
+This version also validates the token differently. Because Okta's custom authorization server issues a real JWT access token, the function verifies it locally against Okta's signing keys — pinning the issuer, the audience, and the client — instead of calling an introspection endpoint on every request.
+
+And here is the honest twist. Every cloud identity provider — AWS, Google, Azure — skips dynamic client registration, so their MCP builds shim it by hand. Okta actually implements it. But the broker is still the authorization server Claude talks to, so we answer registration ourselves. The gap the whole series chased turns out to be a product choice, not a technical wall.
+
+The one thing you set up by hand is an OIDC app in Okta — Terraform does not manage Okta. You create the app, hand its client ID, secret, and issuer to the deploy, and paste the callback URL back onto the app once. Everything else is a single apply.
+
+We use Cloud Asset Inventory as the example tool set, but the pattern works for any Cloud Function-backed MCP server.
 
 WHAT YOU'LL LEARN
-• The serverless MCP backend pattern — how to make remote Cloud Functions appear local to any AI client
-• Writing a stdio MCP proxy in Bash (and PowerShell 7+) that signs OIDC JWTs with a service account key and exchanges them for id_tokens at the Google token endpoint
-• Securing Cloud Functions with platform-level OIDC validation on Cloud Run — no in-code JWT validation needed (unlike the Azure variant which requires JWKS validation in code)
-• Applying Application Default Credentials — the function queries Cloud Asset Inventory without credentials in code or environment variables
-• Building a self-configuring /tools discovery endpoint so the proxy never needs hardcoded tool definitions
-• Deploying two service accounts (function identity + proxy identity) with least-privilege IAM bindings using Terraform
+• Exposing Cloud Functions as MCP tools over a remote endpoint Claude connects to directly
+• Why the function is public, and how authentication is enforced in code instead of by the platform
+• Brokering Okta OIDC for an MCP client — discovery, dynamic client registration, authorize, callback, token, and refresh
+• Validating an Okta access-token JWT locally against the JWKS, pinning issuer, audience, and client
+• Why the cloud IdPs all skip dynamic client registration — and why Okta is the one that doesn't
+• Wiring an Okta OIDC app to a Cloud Function: the client credentials in, the callback URL out
 
 INFRASTRUCTURE DEPLOYED
-• Cloud Functions 2nd Gen (backed by Cloud Run) — 10 Python 3.11 handlers, scales to zero when idle (OIDC token validated at platform level before any handler runs)
-• serverless-mcp-func-sa — function service account with roles/cloudasset.viewer and roles/storage.objectViewer
-• serverless-mcp-proxy-sa — proxy service account with roles/run.invoker and roles/cloudfunctions.invoker; JSON key exported for proxy use
-• Cloud Storage bucket for function source code
-• MCP proxy (proxy.sh / proxy.ps1) — generic stdio bridge with OIDC token management, zero tool-specific logic
+• One Cloud Function 2nd Gen (Python 3.11) — the OAuth broker, the MCP endpoint, and ten tools, public with auth enforced in code
+• Cloud Asset Inventory access via Application Default Credentials — no credentials in code
+• Firestore for transient OAuth login state, swept on a short TTL
+• The Okta client secret held in Secret Manager, never a plaintext environment variable
+• An Okta OIDC app plus a custom authorization server you create once by hand — the piece Terraform cannot provision
+• Everything else provisioned with Terraform in a single apply, torn down with a single command
 
 GitHub
-https://github.com/mamonaco1973/gcp-serverless-mcp
+https://github.com/mamonaco1973/gcp-okta-mcp
 
 README
-https://github.com/mamonaco1973/gcp-serverless-mcp/blob/main/README.md
+https://github.com/mamonaco1973/gcp-okta-mcp/blob/main/README.md
 
 TIMESTAMPS
 00:00 Introduction
-00:16 Architecture
-00:59 Build the Code
-01:15 Build Results
-01:52 Demo
+00:44 Architecture
+01:45 Securing MCP
+02:52 Deploy It Yourself

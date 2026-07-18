@@ -4,7 +4,7 @@ Connect Claude directly to your GCP resource inventory. No local proxy. No
 service account key file on your laptop. You paste a URL, you log in through your
 Okta org, and the tools work.
 
-This is the **Okta sibling of [`gcp-oauth-mcp`](../gcp-oauth-mcp)**. Same GCP
+This is the **Okta sibling of [`gcp-oauth-mcp`](https://github.com/mamonaco1973/gcp-oauth-mcp)**. Same GCP
 host — one public Cloud Function, Firestore, Secret Manager, auth enforced in
 code. The one thing that changes is the upstream identity provider: **Okta
 instead of Google.** It's the bring-your-own-IdP entry in the set — the broker
