@@ -1,0 +1,13 @@
+.terraform
+*.tfstate
+*.tfstate.backup
+*.terraform.lock.hcl
+*.terraform.*
+*.pem
+*.pub
+*.zip
+credentials.json
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
