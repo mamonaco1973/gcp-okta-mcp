@@ -78,8 +78,9 @@ EOF
     exit 1
 fi
 
-echo "NOTE: Okta client ID: ${MCP_OKTA_CLIENT_ID}"
-echo "NOTE: Okta issuer:    ${MCP_OKTA_ISSUER}"
+# Values intentionally not echoed — the client ID and issuer carry the org name.
+echo "NOTE: Okta client ID is set."
+echo "NOTE: Okta issuer is set."
 
 # ------------------------------------------------------------------------------
 # Issuer reachability — confirm the custom AS metadata resolves. Catches typos
@@ -96,7 +97,8 @@ _validate_issuer() {
         echo "WARNING: Could not read authorization metadata from the issuer."
         return 1
     fi
-    echo "NOTE: Okta authorization server reachable (authorize: ${auth_ep})."
+    # Endpoint URL not echoed — it embeds the org name.
+    echo "NOTE: Okta authorization server reachable."
 }
 
 for _attempt in 1 2 3; do
@@ -107,7 +109,7 @@ for _attempt in 1 2 3; do
         echo "NOTE: Retrying issuer check in 5s (${_attempt}/3)..."
         sleep 5
     else
-        echo "ERROR: Okta issuer ${MCP_OKTA_ISSUER} is not reachable or not a valid custom AS."
+        echo "ERROR: Okta issuer is not reachable or not a valid custom AS. Check MCP_OKTA_ISSUER."
         exit 1
     fi
 done
